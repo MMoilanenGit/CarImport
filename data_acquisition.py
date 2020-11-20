@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[6]:
 
 
 import openpyxl
@@ -11,33 +11,30 @@ import re
 
 def from_sheets(file):
     '''
-    File comes yearly. Excel file has 13 sheets, first is Description and other 12 sheets are for months.
-    Function from_sheet concatenates monthly sheets into one dataframe.
+    Source data includes one full year in one file. 
+    Yearly Excel file has 13 sheets, first is Description and other 12 sheets are for months.
+    Function from_sheet concatenates monthly sheets into one dataframe, and thus returns Dataframe of one full year.
+    
+    
     '''
+    
+    #Skip Description sheet
     sheet_names = pd.ExcelFile(file).sheet_names[1:]
     
-    one_from_file= pd.DataFrame(pd.read_excel(file, sheet_name=sheet_names[0], header=0, convert_float=True).drop(0,axis=0))
-    one_from_file['Käyttöönottopvä'] = one_from_file['Käyttöönottopvä'].astype('datetime64[ns]')
-    one_from_file['Päätöspäivä'] = one_from_file['Päätöspäivä'].astype('datetime64[ns]')
+    year_file = pd.DataFrame()
     
-    
-    for sheet in sheet_names[1:]:
-    
-        data = pd.read_excel(file, sheet_name=sheet, header=0, convert_float=True).drop(0,axis=0)
-        data['Käyttöönottopvä'] = data['Käyttöönottopvä'].astype('datetime64[ns]')
-        data['Päätöspäivä'] = data['Päätöspäivä'].astype('datetime64[ns]')
-        one_from_file = one_from_file.append(data)
+    for sheet in sheet_names:
         
-    return one_from_file
+        # Use converter for Dates columns into strings, because as in few sheets were saved as numbers, and gave date 1970-01-01
+        data = pd.read_excel(file, sheet_name=sheet, header=0, converters={'Käyttöönottopvä':str,'Päätöspäivä':str}).drop(0,axis=0)
+        year_file = year_file.append(data)
+        
+    return year_file
 
 
-
-
-#for year in car_files2:
 def all_data_from_files():
     '''
-    Function takes year files from source folder, and concatenates into one Dataframe.
-    
+    Merge all yearly Excel files from working directory into one Dataframe.
     
     '''
     
@@ -46,22 +43,15 @@ def all_data_from_files():
         car_files.append(file)
     car_files
     
-    data_1st_year = from_sheets(car_files[0])
+    #data_1st_year = from_sheets(car_files[0])
+    data_years = pd.DataFrame()
     
-    for year in car_files[1:]:
-        
+    for year in car_files:
         
         data = from_sheets(year)
-        
-        data_1st_year = data_1st_year.append(data)
-        
-        
-    data_1st_year["Autovero"] = pd.to_numeric(data_1st_year["Autovero"], errors='coerce')
-    data_1st_year["Ajokm/1000"] = pd.to_numeric(data_1st_year["Ajokm/1000"], errors='coerce')
-    data_1st_year["Verotusarvo"] = pd.to_numeric(data_1st_year["Verotusarvo"], errors='coerce')    
+        data_years = data_years.append(data)
     
-    
-    return data_1st_year
+    return data_years
  
     
 def engine_power(col):
@@ -108,6 +98,14 @@ def feature_creation(data):
     
     Data cleaning and renaming of columns to english is included.
     '''
+    data["Autovero"] = pd.to_numeric(data["Autovero"], errors='coerce')
+    data["Ajokm/1000"] = pd.to_numeric(data["Ajokm/1000"], errors='coerce')
+    data["Verotusarvo"] = pd.to_numeric(data["Verotusarvo"], errors='coerce') 
+    
+    data['Käyttöönottopvä'] = data['Käyttöönottopvä'].astype('datetime64[ns]')
+    data['Päätöspäivä'] = data['Päätöspäivä'].astype('datetime64[ns]')
+    
+    
     # Clean data 
     #data['Mallin tarkennin'] = data['Mallin tarkennin'].apply(lambda x: x.replace(",", "."))
     data['Mallin tarkennin'] = data['Mallin tarkennin'].str.replace(",",".")
@@ -149,4 +147,38 @@ if __name__ == "__main__":
     data = all_data_from_files()
     data = feature_creation(data)
     data.to_excel(r'data_with_features.xlsx', index = False)
+
+
+# In[17]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+
+
+# In[5]:
+
+
+
+
+
+# In[ ]:
+
+
+
+    
+    
 
