@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[6]:
+# In[3]:
 
 
 import openpyxl
@@ -12,12 +12,12 @@ import re
 def from_sheets(file):
     '''
     Source data includes one full year in one file. 
+    
     Yearly Excel file has 13 sheets, first is Description and other 12 sheets are for months.
     Function from_sheet concatenates monthly sheets into one dataframe, and thus returns Dataframe of one full year.
     
     
     '''
-    
     #Skip Description sheet
     sheet_names = pd.ExcelFile(file).sheet_names[1:]
     
@@ -58,8 +58,8 @@ def engine_power(col):
     '''
     Extracts engine power from string
     '''
-    #x = re.findall('\d+[KW]', str(col)) # Returns also 4WD
-    x = re.findall(' \d+[K]', str(col)) # This works, matches numbers followed by K
+    #x = re.findall('\d+[KW]', str(col)) 
+    x = re.findall(' \d+[K]', str(col)) 
     x = re.sub('[^0-9]', '', str(x))
     return(x)
 
@@ -67,7 +67,7 @@ def engine_size(col):
     '''
     Extracts engine size from string
     '''
-    x = re.findall('\d\.\d', str(col)) # This works perfectly
+    x = re.findall('\d\.\d', str(col)) 
     x = re.sub('[^0-9.]','', str(x))
     return(x)
 
@@ -86,60 +86,65 @@ def extract_D_one(col):
     '''
     x = re.findall('\d\.\d[A-Z]+', str(col))
     x = re.sub('[0-9.]',"", str(x)).strip("[']")
+    
+    
     return(x)
 
-    
 def feature_creation(data):
     '''
-    Column [Mallin tarkennin] has information about a car, for example power, number of doors, size of engine etc. 
-    in text format. 
+    This function extracts information from text in column model_extension, and creates new columns on the information.
     
-    This function extracts information from text, and creates new columns on the information.
+    For Example in column model_extension:
+    "2.0 D 5D MA 4WD AUT 150KW", we extract information to new columns
+    engine_size = 2.0
+    diesel = 1
+    automatic = 1
+    four_wd = 1
+    doors = 5
+    power_KW = 150
     
-    Data cleaning and renaming of columns to english is included.
+
+    Columns are renamed and data types are changed
     '''
-    data["Autovero"] = pd.to_numeric(data["Autovero"], errors='coerce')
-    data["Ajokm/1000"] = pd.to_numeric(data["Ajokm/1000"], errors='coerce')
-    data["Verotusarvo"] = pd.to_numeric(data["Verotusarvo"], errors='coerce') 
+    english_col_names = ["brand","model", "model_extension","condition_B_N_G","decision_date","registration_date","mileage","taxation_value","car_tax","condition_lowered_A"]
     
-    data['Käyttöönottopvä'] = data['Käyttöönottopvä'].astype('datetime64[ns]')
-    data['Päätöspäivä'] = data['Päätöspäivä'].astype('datetime64[ns]')
+    data.columns = english_col_names
+    
+    data["car_tax"] = pd.to_numeric(data["car_tax"], errors='coerce')
+    data["mileage"] = pd.to_numeric(data["mileage"], errors='coerce')
+    data["taxation_value"] = pd.to_numeric(data["taxation_value"], errors='coerce') 
+    
+    data['registration_date'] = data['registration_date'].astype('datetime64[ns]')
+    data['decision_date'] = data['decision_date'].astype('datetime64[ns]')
     
     
     # Clean data 
-    #data['Mallin tarkennin'] = data['Mallin tarkennin'].apply(lambda x: x.replace(",", "."))
-    data['Mallin tarkennin'] = data['Mallin tarkennin'].str.replace(",",".")
-
-    data['Mallin tarkennin'] = data['Mallin tarkennin'].str.upper() # All letters to capital
-    data['Mallin tarkennin'] = data['Mallin tarkennin'].map(lambda x: re.sub(' KW', 'KW', str(x))) # Remove whitespace before KW
+    data['model_extension'] = data['model_extension'].str.replace(",",".")
+    data['model_extension'] = data['model_extension'].str.upper() # All letters to capital
+    data['model_extension'] = data['model_extension'].map(lambda x: re.sub(' KW', 'KW', str(x))) # Remove whitespace before KW
     
     # New columns
-    data['diesel'] = data['Mallin tarkennin'].str.count(pat=' D ') # Look for D, if found prints 1
-    data['aut'] = data['Mallin tarkennin'].str.count(pat='AUT') # Look for AUT, if found print 1
-    data['neliveto'] = data['Mallin tarkennin'].str.count(pat='4WD') # Look for 4WD, if found print 1
+    data['diesel'] = data['model_extension'].str.count(pat=' D ') # Look for D, if found prints 1
+    data['automatic'] = data['model_extension'].str.count(pat='AUT') # Look for AUT, if found print 1
+    data['four_wd'] = data['model_extension'].str.count(pat='4WD') # Look for 4WD, if found print 1
+    data['car_age'] = (data['decision_date']-(data['registration_date']))/ pd.Timedelta(365, unit='d') # Car age
+    data['power_KW'] = data['model_extension'].apply(engine_power) # Engine power in KW:s
+    data['engine_size'] = data['model_extension'].apply(engine_size) # Engine size in cm
+    data['doors'] = data['model_extension'].apply(door_number) # Number of doors
     
-    data['year_month'] = data["Päätöspäivä"].dt.strftime('%Y-%m')
-    data['year'] = data['Päätöspäivä'].dt.year # Year column
-    data['month'] = data['Päätöspäivä'].dt.month # Month column
-    data['car_age'] = (data['Päätöspäivä']-(data['Käyttöönottopvä']))/ pd.Timedelta(365, unit='d') # Car age
-    data['engine_powers'] = data['Mallin tarkennin'].apply(engine_power) # Engine power in KW:s
-    data['engine_size'] = data['Mallin tarkennin'].apply(engine_size) # Engine size in cm
-    data['doors'] = data['Mallin tarkennin'].apply(door_number)
-    data['extract_D_one'] = data['Mallin tarkennin'].apply(extract_D_one)
+    data['extract_D_one'] = data['model_extension'].apply(extract_D_one).str.count(pat='D') #Extract from col model_extension, add 1 if D found
+    data["diesel"] = data["diesel"].add(data["extract_D_one"]) # Add 1 to diesel column
+    data = data.drop(["extract_D_one"], axis=1)
+    
+    
     
     # Correct data types
-    data['engine_powers'] = pd.to_numeric(data['engine_powers'])
+    data['power_KW'] = pd.to_numeric(data['power_KW'])
     data['engine_size'] = pd.to_numeric(data['engine_size'])
     data['doors'] = pd.to_numeric(data['doors'])
+    
+    return(data)   
 
-    # Rename columns to english
-    col_names_to_english = ["mileage","car_tax","condition_lowered_A","condition_B_N_G","registration_date", "model","model_extension", 
-                            "brand","decision_date","taxation_value","diesel", "automatic", "four_wd", "year_month","year","month",
-                            "car_age","power_KW","engine_size","doors","extract_D"]
-    data.columns = col_names_to_english
-    
-    
-    return(data)
 
 
 if __name__ == "__main__":
@@ -147,38 +152,4 @@ if __name__ == "__main__":
     data = all_data_from_files()
     data = feature_creation(data)
     data.to_excel(r'data_with_features.xlsx', index = False)
-
-
-# In[17]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-
-
-# In[5]:
-
-
-
-
-
-# In[ ]:
-
-
-
-    
-    
 
